@@ -20,6 +20,9 @@ const SCORE_COLOR = {
 
 // Features to display in the grid (key → display label)
 const FEATURE_DISPLAY = {
+  is_typosquat:             "Brand Spoofing",
+  deceptive_subdomain:      "Subdomain Spoof",
+  has_punycode:             "Punycode / IDN",
   has_ip:                   "IP Address",
   has_at_symbol:            "@ Symbol",
   suspicious_tld:           "Suspicious TLD",
@@ -28,9 +31,11 @@ const FEATURE_DISPLAY = {
   suspicious_keyword_count: "Phish Keywords",
   subdomain_count:          "Subdomains",
   hyphen_count:             "Hyphens",
-  url_length:               "URL Length",
   entropy:                  "Entropy",
 };
+
+// Positive signals where "Yes" is GOOD (safe) and "No" is bad/warning
+const POSITIVE_SIGNALS = new Set(["https", "trusted_domain"]);
 
 // ─── Render helpers ───────────────────────────────────────────────────────────
 
@@ -63,18 +68,43 @@ function renderScore(score, verdict) {
     </div>`;
 }
 
-function renderFeatureCard(label, value) {
+function renderWarning(warning) {
+  if (!warning) return "";
+  return `
+    <div class="warning-alert">
+      <span class="warning-icon">🚨</span>
+      <span>${escapeHtml(warning)}</span>
+    </div>`;
+}
+
+function renderFeatureCard(key, label, value, allFeatures) {
   let displayValue, cls;
 
-  if (typeof value === "boolean") {
+  if (key === "is_typosquat") {
+    if (value) {
+      displayValue = allFeatures?.spoofed_brand ? `Yes (${allFeatures.spoofed_brand})` : "Yes";
+      cls = "feat-danger";
+    } else {
+      displayValue = "No";
+      cls = "feat-safe";
+    }
+  } else if (typeof value === "boolean") {
     displayValue = value ? "Yes" : "No";
-    cls          = value ? "feat-true" : "feat-false";
+    if (POSITIVE_SIGNALS.has(key)) {
+      cls = value ? "feat-safe" : "feat-danger";
+    } else {
+      cls = value ? "feat-danger" : "feat-safe";
+    }
   } else if (typeof value === "number") {
     displayValue = value;
-    cls          = "feat-num";
+    if (key === "suspicious_keyword_count" && value > 0) {
+      cls = "feat-danger";
+    } else {
+      cls = "feat-num";
+    }
   } else {
     displayValue = value ?? "—";
-    cls          = "feat-num";
+    cls = "feat-num";
   }
 
   return `
@@ -88,7 +118,7 @@ function renderFeatures(features) {
   if (!features || !Object.keys(features).length) return "";
 
   const cards = Object.entries(FEATURE_DISPLAY)
-    .map(([key, label]) => renderFeatureCard(label, features[key]))
+    .map(([key, label]) => renderFeatureCard(key, label, features[key], features))
     .join("");
 
   return `
@@ -164,8 +194,9 @@ function render(data) {
   app.innerHTML =
     renderUrl(data.url) +
     renderScore(data.risk_score, data.verdict) +
+    renderWarning(data.warning) +
     renderFeatures(data.features) +
-    `<div class="footer">PhishGuard Lite v1.0 · Local heuristic engine</div>`;
+    `<div class="footer">PhishGuard Lite v1.1 · Brand-Aware Security Engine</div>`;
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

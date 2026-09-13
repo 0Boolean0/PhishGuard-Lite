@@ -40,6 +40,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       titleEl.innerText = "✅ Safe Website";
       confEl.innerText = `Risk Score: ${data.risk_score}/100`;
     }
+    if (data.warning) {
+      confEl.innerText += `\n${data.warning}`;
+    }
   } catch (err) {
     titleEl.innerText = "Server Error";
     confEl.innerText = "Start the FastAPI backend server.";
