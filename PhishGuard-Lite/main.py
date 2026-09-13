@@ -1,72 +1,172 @@
-import re
-import joblib
-import numpy as np
-from urllib.parse import urlparse
-from collections import Counter
+"""
+PhishGuard-Lite - FastAPI Backend
+Phishing URL detection using heuristic + ML-based feature extraction.
+Run with: python main.py
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import re
+import math
+from urllib.parse import urlparse
+from collections import Counter
 
-app = FastAPI()
+app = FastAPI(title="PhishGuard-Lite API", version="1.0.0")
 
-# Allow extension to call local server without CORS blocks
+# Allow requests from the Chrome extension
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load your trained model
-MODEL_PATH = "phishguard_model.pkl" # Make sure path is correct
-try:
-    model = joblib.load(MODEL_PATH)
-    print("Loaded ML Model successfully!")
-except Exception as e:
-    print(f"Error loading model: {e}")
+# ---------------------------------------------------------------------------
+# Known safe / suspicious TLDs & keywords
+# ---------------------------------------------------------------------------
+SUSPICIOUS_KEYWORDS = [
+    "login", "signin", "verify", "account", "update", "secure", "banking",
+    "paypal", "ebay", "amazon", "apple", "microsoft", "google", "facebook",
+    "password", "credential", "confirm", "support", "alert", "suspend",
+    "unusual", "activity", "validate", "click", "free", "winner", "prize",
+]
 
-class URLRequest(BaseModel):
+SUSPICIOUS_TLDS = {".tk", ".ml", ".ga", ".cf", ".gq", ".xyz", ".top", ".pw",
+                   ".cc", ".info", ".biz", ".click", ".link", ".work"}
+
+TRUSTED_DOMAINS = {
+    "google.com", "youtube.com", "facebook.com", "amazon.com", "wikipedia.org",
+    "twitter.com", "instagram.com", "linkedin.com", "microsoft.com", "apple.com",
+    "github.com", "stackoverflow.com", "reddit.com", "netflix.com", "paypal.com",
+}
+
+# ---------------------------------------------------------------------------
+# Feature extraction helpers
+# ---------------------------------------------------------------------------
+
+def _entropy(s: str) -> float:
+    """Shannon entropy of a string."""
+    if not s:
+        return 0.0
+    counts = Counter(s)
+    length = len(s)
+    return -sum((c / length) * math.log2(c / length) for c in counts.values())
+
+
+def extract_features(url: str) -> dict:
+    parsed = urlparse(url if url.startswith("http") else "http://" + url)
+    hostname = parsed.hostname or ""
+    path = parsed.path or ""
+    full = url.lower()
+
+    tld = ""
+    parts = hostname.split(".")
+    if len(parts) >= 2:
+        tld = "." + parts[-1]
+
+    features = {
+        "url_length": len(url),
+        "hostname_length": len(hostname),
+        "dot_count": hostname.count("."),
+        "hyphen_count": hostname.count("-"),
+        "digit_count": sum(c.isdigit() for c in hostname),
+        "has_ip": bool(re.match(r"^\d{1,3}(\.\d{1,3}){3}$", hostname)),
+        "has_at_symbol": "@" in url,
+        "has_double_slash": "//" in path,
+        "suspicious_tld": tld in SUSPICIOUS_TLDS,
+        "subdomain_count": max(len(parts) - 2, 0),
+        "path_depth": len([p for p in path.split("/") if p]),
+        "suspicious_keyword_count": sum(kw in full for kw in SUSPICIOUS_KEYWORDS),
+        "entropy": round(_entropy(hostname), 4),
+        "https": parsed.scheme == "https",
+        "trusted_domain": any(hostname.endswith(td) for td in TRUSTED_DOMAINS),
+    }
+    return features
+
+
+# ---------------------------------------------------------------------------
+# Risk scoring (weighted heuristic)
+# ---------------------------------------------------------------------------
+
+def compute_risk(features: dict) -> tuple[float, str]:
+    """
+    Returns (score 0-100, verdict).
+    Higher score = more likely phishing.
+    """
+    score = 0.0
+
+    # Instant trust shortcut
+    if features["trusted_domain"] and not features["has_ip"] and features["https"]:
+        return 5.0, "safe"
+
+    # Penalise / reward individual signals
+    if features["has_ip"]:
+        score += 35
+    if features["has_at_symbol"]:
+        score += 20
+    if features["suspicious_tld"]:
+        score += 20
+    if features["has_double_slash"]:
+        score += 10
+    if not features["https"]:
+        score += 10
+
+    score += min(features["url_length"] / 10, 15)          # long URLs → up to +15
+    score += min(features["hyphen_count"] * 5, 15)         # hyphens   → up to +15
+    score += min(features["subdomain_count"] * 8, 24)      # subdomains→ up to +24
+    score += min(features["suspicious_keyword_count"] * 8, 24)  # keywords→ up to +24
+    score += min(max(features["entropy"] - 3.5, 0) * 10, 15)    # entropy  → up to +15
+    score += min(features["digit_count"] * 2, 10)          # digits in host
+
+    score = round(min(score, 100), 1)
+
+    if score < 25:
+        verdict = "safe"
+    elif score < 55:
+        verdict = "suspicious"
+    else:
+        verdict = "phishing"
+
+    return score, verdict
+
+
+# ---------------------------------------------------------------------------
+# Request / Response models
+# ---------------------------------------------------------------------------
+
+class CheckRequest(BaseModel):
     url: str
 
-def extract_features(url: str):
-    parsed = urlparse(url)
-    domain = parsed.netloc if parsed.netloc else parsed.path
-    
-    length = len(url)
-    num_dots = url.count('.')
-    num_hyphens = url.count('-')
-    has_at = 1 if '@' in url else 0
-    
-    ip_pattern = r'(([01]?\d\d?|2[0-4]\d|25[0-5])\.){3}([01]?\d\d?|2[0-4]\d|25[0-5])'
-    has_ip = 1 if re.search(ip_pattern, domain) else 0
-    
-    has_https = 1 if parsed.scheme == 'https' else 0
-    keywords = ['login', 'verify', 'secure', 'account', 'update', 'banking', 'signin', 'admin', 'pay']
-    num_keywords = sum(1 for kw in keywords if kw in url.lower())
-    num_digits = sum(c.isdigit() for c in url)
-    
-    def calc_entropy(text):
-        if not text: return 0
-        counts = Counter(text)
-        return -sum((c / len(text)) * np.log2(c / len(text)) for c in counts.values())
 
-    domain_entropy = calc_entropy(domain)
-    return [length, num_dots, num_hyphens, has_at, has_ip, has_https, num_keywords, num_digits, domain_entropy]
+class CheckResponse(BaseModel):
+    url: str
+    risk_score: float          # 0 – 100
+    verdict: str               # "safe" | "suspicious" | "phishing"
+    features: dict
 
-@app.post("/predict")
-def predict(request: URLRequest):
-    features = extract_features(request.url)
-    prediction = model.predict([features])[0]
-    probabilities = model.predict_proba([features])[0]
-    confidence = float(probabilities[prediction])
-    
-    return {
-        "url": request.url,
-        "is_phishing": bool(prediction == 1),
-        "confidence": round(confidence * 100, 2)
-    }
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@app.get("/")
+def root():
+    return {"message": "PhishGuard-Lite API is running. POST /check to analyse a URL."}
+
+
+@app.post("/check", response_model=CheckResponse)
+def check_url(req: CheckRequest):
+    url = req.url.strip()
+    features = extract_features(url)
+    risk_score, verdict = compute_risk(features)
+    return CheckResponse(url=url, risk_score=risk_score, verdict=verdict, features=features)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
