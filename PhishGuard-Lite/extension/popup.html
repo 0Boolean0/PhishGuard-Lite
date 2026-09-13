@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhishGuard Lite</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 0 0 16px;
+      user-select: none;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #1e293b;
+      padding: 14px 16px;
+      border-bottom: 1px solid #334155;
+    }
+    .header-icon { font-size: 22px; }
+    .header-title { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+    .header-sub   { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+
+    /* ── URL card ── */
+    .url-card {
+      margin: 14px 16px 0;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+    .url-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 4px; }
+    .url-text  { font-size: 12px; color: #cbd5e1; word-break: break-all; line-height: 1.5; }
+
+    /* ── Score ring ── */
+    .score-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 18px 0 10px;
+    }
+    .ring-wrap { position: relative; width: 110px; height: 110px; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-bg    { fill: none; stroke: #1e293b; stroke-width: 10; }
+    .ring-fill  { fill: none; stroke-width: 10; stroke-linecap: round;
+                  transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease; }
+    .ring-text  {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .ring-score   { font-size: 28px; font-weight: 800; line-height: 1; }
+    .ring-max     { font-size: 11px; color: #64748b; }
+
+    /* ── Verdict badge ── */
+    .verdict-badge {
+      margin-top: 10px;
+      padding: 4px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .verdict-safe       { background: #14532d; color: #4ade80; }
+    .verdict-suspicious { background: #451a03; color: #fbbf24; }
+    .verdict-phishing   { background: #450a0a; color: #f87171; }
+    .verdict-unknown    { background: #1e293b; color: #94a3b8; }
+
+    /* ── Features grid ── */
+    .features-title {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+      color: #64748b; margin: 14px 16px 8px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 0 16px;
+    }
+    .feat-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .feat-name  { font-size: 10px; color: #64748b; text-transform: capitalize; margin-bottom: 2px; }
+    .feat-value { font-size: 13px; font-weight: 600; }
+    .feat-true  { color: #f87171; }
+    .feat-false { color: #4ade80; }
+    .feat-num   { color: #93c5fd; }
+
+    /* ── Footer ── */
+    .footer {
+      margin: 14px 16px 0;
+      font-size: 10px;
+      color: #475569;
+      text-align: center;
+    }
+
+    /* ── Loading / error states ── */
+    .state-box {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 160px; gap: 10px;
+      color: #64748b; font-size: 13px;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #334155;
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Scan button ── */
+    .btn-scan {
+      display: block; width: calc(100% - 32px);
+      margin: 12px 16px 0;
+      padding: 9px;
+      background: #2563eb; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-scan:hover { background: #1d4ed8; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <span class="header-icon">🛡️</span>
+    <div>
+      <div class="header-title">PhishGuard Lite</div>
+      <div class="header-sub">Real-time phishing detection</div>
+    </div>
+  </div>
+
+  <!-- Dynamic content injected by popup.js -->
+  <div id="app">
+    <div class="state-box">
+      <div class="spinner"></div>
+      <span>Analysing…</span>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
