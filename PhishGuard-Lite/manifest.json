@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "PhishGuard Detector",
+  "name": "PhishGuard-Lite",
   "version": "1.0",
   "description": "Detects phishing websites in real-time.",
   "permissions": ["tabs", "activeTab"],
