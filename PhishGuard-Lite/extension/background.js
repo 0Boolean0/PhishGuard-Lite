@@ -24,9 +24,9 @@ const BADGE_COLORS = {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 async function analyseUrl(url, tabId) {
-  // Skip internal / empty pages
-  if (!url || url.startsWith("chrome://") || url.startsWith("chrome-extension://")
-      || url.startsWith("about:") || url.startsWith("edge://")) {
+  // Only inspect standard web pages (HTTP and HTTPS)
+  if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+    delete tabCache[tabId];
     clearBadge(tabId);
     return;
   }

@@ -60,10 +60,15 @@ def extract_features(url: str) -> dict:
     path = parsed.path or ""
     full = url.lower()
 
+    has_ip = bool(re.match(r"^\d{1,3}(\.\d{1,3}){3}$", hostname))
+
     tld = ""
     parts = hostname.split(".")
-    if len(parts) >= 2:
+    if len(parts) >= 2 and not has_ip:
         tld = "." + parts[-1]
+
+    # Verify if hostname is an exact match or valid subdomain of a trusted domain
+    is_trusted = any(hostname == td or hostname.endswith("." + td) for td in TRUSTED_DOMAINS)
 
     features = {
         "url_length": len(url),
@@ -71,18 +76,19 @@ def extract_features(url: str) -> dict:
         "dot_count": hostname.count("."),
         "hyphen_count": hostname.count("-"),
         "digit_count": sum(c.isdigit() for c in hostname),
-        "has_ip": bool(re.match(r"^\d{1,3}(\.\d{1,3}){3}$", hostname)),
+        "has_ip": has_ip,
         "has_at_symbol": "@" in url,
         "has_double_slash": "//" in path,
         "suspicious_tld": tld in SUSPICIOUS_TLDS,
-        "subdomain_count": max(len(parts) - 2, 0),
+        "subdomain_count": 0 if has_ip else max(len(parts) - 2, 0),
         "path_depth": len([p for p in path.split("/") if p]),
         "suspicious_keyword_count": sum(kw in full for kw in SUSPICIOUS_KEYWORDS),
         "entropy": round(_entropy(hostname), 4),
         "https": parsed.scheme == "https",
-        "trusted_domain": any(hostname.endswith(td) for td in TRUSTED_DOMAINS),
+        "trusted_domain": is_trusted,
     }
     return features
+
 
 
 # ---------------------------------------------------------------------------

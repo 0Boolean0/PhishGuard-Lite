@@ -113,6 +113,17 @@ function renderError(message) {
     </div>`;
 }
 
+function renderUnsupported() {
+  return `
+    <div class="state-box">
+      <span style="font-size:28px">🌐</span>
+      <span style="text-align:center">
+        Unsupported page.<br>
+        Open a standard website (HTTP/HTTPS) to scan.
+      </span>
+    </div>`;
+}
+
 function renderOffline() {
   return `
     <div class="state-box">
@@ -167,6 +178,11 @@ function render(data) {
     if (!tab?.id) {
       document.getElementById("app").innerHTML =
         renderError("Could not determine the active tab.");
+      return;
+    }
+
+    if (!tab.url || (!tab.url.startsWith("http://") && !tab.url.startsWith("https://"))) {
+      document.getElementById("app").innerHTML = renderUnsupported();
       return;
     }
 

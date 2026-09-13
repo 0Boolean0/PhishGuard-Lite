@@ -14,24 +14,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   urlEl.innerText = tab.url;
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/predict", {
+    const response = await fetch("http://127.0.0.1:8000/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: tab.url })
     });
+    
+    if (!response.ok) {
+      throw new Error(`Server status: ${response.status}`);
+    }
+
     const data = await response.json();
 
-    if (data.is_phishing) {
+    // Check verdict ("phishing", "suspicious", or "safe")
+    if (data.verdict === "phishing") {
       cardEl.className = "card danger";
       titleEl.innerText = "⚠️ Phishing Warning!";
-      confEl.innerText = `Confidence: ${data.confidence}%`;
+      confEl.innerText = `Risk Score: ${data.risk_score}/100`;
+    } else if (data.verdict === "suspicious") {
+      cardEl.className = "card warning";
+      titleEl.innerText = "⚡ Suspicious Website!";
+      confEl.innerText = `Risk Score: ${data.risk_score}/100`;
     } else {
       cardEl.className = "card safe";
       titleEl.innerText = "✅ Safe Website";
-      confEl.innerText = `Confidence: ${data.confidence}%`;
+      confEl.innerText = `Risk Score: ${data.risk_score}/100`;
     }
   } catch (err) {
     titleEl.innerText = "Server Error";
     confEl.innerText = "Start the FastAPI backend server.";
+    console.error(err);
   }
 });
