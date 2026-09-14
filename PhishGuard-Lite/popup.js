@@ -5,19 +5,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   const confEl = document.getElementById("confidence");
   const cardEl = document.getElementById("status-card");
 
-  if (!tab || !tab.url || !tab.url.startsWith("http")) {
+  const url = tab?.url || "";
+  const isAnalyzable = url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:");
+
+  if (!tab || !isAnalyzable) {
     titleEl.innerText = "Unsupported Page";
-    urlEl.innerText = "Navigate to a standard web page.";
+    urlEl.innerText = "Navigate to a standard web page or URL.";
     return;
   }
 
-  urlEl.innerText = tab.url;
+  urlEl.innerText = url.startsWith("data:") ? url.slice(0, 50) + "..." : url;
 
   try {
     const response = await fetch("http://127.0.0.1:8000/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: tab.url })
+      body: JSON.stringify({ url })
     });
     
     if (!response.ok) {
@@ -40,12 +43,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       titleEl.innerText = "✅ Safe Website";
       confEl.innerText = `Risk Score: ${data.risk_score}/100`;
     }
+
     if (data.warning) {
       confEl.innerText += `\n${data.warning}`;
     }
+
+    if (data.signals && data.signals.length) {
+      confEl.innerText += `\nSignals: ${data.signals.join(", ")}`;
+    }
   } catch (err) {
     titleEl.innerText = "Server Error";
-    confEl.innerText = "Start the FastAPI backend server.";
+    confEl.innerText = "Start the FastAPI backend server (python main.py).";
     console.error(err);
   }
 });

@@ -3,14 +3,15 @@
  *
  * Responsibilities:
  *  - Listen for tab URL changes (navigation committed)
- *  - POST the URL to the local FastAPI backend
+ *  - Supports HTTP, HTTPS, and Data URI phishing detection
+ *  - POST the URL to the local FastAPI backend (16 heuristic criteria)
  *  - Update the extension badge colour and text with the risk score
  *  - Cache the last result per tab so the popup can read it instantly
  */
 
 const API_URL = "http://127.0.0.1:8000/check";
 
-// In-memory cache: tabId → { url, risk_score, verdict, features }
+// In-memory cache: tabId → { url, risk_score, verdict, warning, signals, features }
 const tabCache = {};
 
 // Badge colour map
@@ -23,19 +24,28 @@ const BADGE_COLORS = {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function isAnalyzableUrl(url) {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:");
+}
+
 async function analyseUrl(url, tabId) {
-  // Only inspect standard web pages (HTTP and HTTPS)
-  if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+  // Only inspect standard web pages and Data URIs
+  if (!isAnalyzableUrl(url)) {
     delete tabCache[tabId];
     clearBadge(tabId);
     return;
   }
 
+  // Instant critical alert for Data URIs in case backend is offline
+  const isDataUri = url.toLowerCase().startsWith("data:");
+
   try {
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, check_ssl: false }),
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -45,8 +55,21 @@ async function analyseUrl(url, tabId) {
     updateBadge(tabId, data);
   } catch (err) {
     console.warn("[PhishGuard] API unreachable:", err.message);
-    tabCache[tabId] = { url, risk_score: null, verdict: "unknown", features: {} };
-    setBadge(tabId, "?", BADGE_COLORS.unknown);
+    if (isDataUri) {
+      const data = {
+        url,
+        risk_score: 100,
+        verdict: "phishing",
+        warning: "Critical: Data URI execution. Local HTML/code execution detected.",
+        signals: ["Data URI Execution"],
+        features: { has_data_uri: true, lacks_https: true }
+      };
+      tabCache[tabId] = data;
+      setBadge(tabId, "100", BADGE_COLORS.phishing);
+    } else {
+      tabCache[tabId] = { url, risk_score: null, verdict: "unknown", signals: [], features: {} };
+      setBadge(tabId, "?", BADGE_COLORS.unknown);
+    }
   }
 }
 
